@@ -1,3 +1,22 @@
+## Reference Implementation (Baseline)
+
 {seed_func}
 
-Refer to the format of a trivial design above. Be very creative and give `{func_name}_v2`. Output code only and enclose your code with Python code block: ```python ... ```.
+---
+
+**Your Task:**
+Create a novel `{func_name}_v2` function that improves upon the reference implementation.
+
+**Guidelines:**
+1. Use the reference implementation as a starting point for understanding the structure
+2. Be creative - explore significantly different approaches
+3. Consider combining multiple strategies or introducing new heuristic components
+4. Aim for diversity - avoid simply tweaking coefficients
+
+**Requirements:**
+- Output ONLY Python code in a code block: ```python ... ```
+- Follow the same function signature format as the reference
+- Ensure code is syntactically correct and executable
+- Include brief inline comments explaining your approach
+
+**Generate your creative design below:**

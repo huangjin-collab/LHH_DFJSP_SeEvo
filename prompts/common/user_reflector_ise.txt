@@ -1,15 +1,42 @@
-Below are two {func_name} functions for {problem_desc}
+## Task: Self-Evolution Reflection
+
+You are analyzing the evolution of {func_name} functions for {problem_desc}
+
+**Problem Description:**
 {func_desc}
 
-You are provided with two code versions below. The second version is generated from the first version based on the following hint, and the result of the second version became more {result} compared to the first. 
+**Evolution Context:**
+The second version was generated from the first version based on a prior hint.
+**Performance Change:** The second version became **{result}** compared to the first.
 
-[First version code]
+### [First Version Code]
+```python
 {first_version_code}
+```
 
-[Second version code]
+### [Second Version Code]
+```python
 {second_version_code}
+```
 
-[hint]
+### [Prior Hint Applied]
 {hint}
 
-You respond with some hints for designing better heuristics for first version code, based on the two code versions and the prior hints, using less than 30 words.
+---
+
+**Your Task:**
+Reflect on this evolution and provide refined insights for future improvements.
+
+**Analysis Focus:**
+- What changes were made from first to second version?
+- Why did these changes lead to {result} performance?
+- How can the prior hint be refined based on this outcome?
+- What new insights emerge from this evolution?
+
+**Requirements:**
+- Provide 2-3 actionable insights
+- Keep response concise (under 60 words)
+- Focus on algorithmic principles, not code syntax
+
+**Output Format:**
+List insights, each on a new line starting with "-"

@@ -1,15 +1,33 @@
+## Task: Crossover - Generate Improved Heuristic
+
 {user_generator}
 
-[Worse code]
+### [Parent 1 - Lower Performance]
 {func_signature0}
 {worse_code}
 
-[Better code]
+### [Parent 2 - Higher Performance]
 {func_signature1}
 {better_code}
 
-[Reflection]
+### [Performance Analysis]
 {reflection}
 
-[Improved code]
-Please write an improved function `{func_name}_v2`, according to the reflection. Output code only and enclose your code with Python code block: ```python ... ```.
+---
+
+**Your Task:**
+Generate an improved `{func_name}_v2` function by combining strengths from both parents.
+
+**Strategy:**
+1. Preserve successful elements from Parent 2 (higher performance)
+2. Consider any useful components from Parent 1
+3. Apply insights from the performance analysis
+4. Introduce novel improvements where possible
+
+**Requirements:**
+- Output ONLY Python code in a code block: ```python ... ```
+- Follow the function signature format
+- Ensure code is syntactically correct
+- Include brief inline comments explaining key logic
+
+**Generate the improved code below:**

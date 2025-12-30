@@ -22,47 +22,57 @@ def init_client(cfg):
         openai.api_base = "https://api.chatanywhere.tech"
         
     elif cfg.model.startswith("GLM"):
-        from zhipuai import ZhipuAI 
-        assert os.getenv('ZHIPU_AI_API_KEY') is not None, "Please set the environment variable ZHIPU_AI_API_KEY"
-        zhipu_api_key = os.getenv('ZHIPU_AI_API_KEY')
-        client = ZhipuAI(api_key=zhipu_api_key)
+        from zhipuai import ZhipuAI
+        assert os.getenv('ZHIPU_AI_API_KEY') is not None, \
+            "Please set the environment variable ZHIPU_AI_API_KEY"
+        client = ZhipuAI(api_key=os.getenv('ZHIPU_AI_API_KEY'))
     
     elif cfg.model.startswith("MOONSHOT"):
         from openai import OpenAI
-        # We use llama api here. See the available models at https://docs.llama-api.com/quickstart#available-models
-        assert os.getenv('MOONSHOT_API_KEY') is not None, "Please set the environment variable MOONSHOT_API_KEY"
+        assert os.getenv('MOONSHOT_API_KEY') is not None, \
+            "Please set the environment variable MOONSHOT_API_KEY"
         client = OpenAI(
-        api_key = os.getenv('MOONSHOT_API_KEY'),
-        base_url = "https://api.moonshot.cn/v1"
-        ) 
+            api_key=os.getenv('MOONSHOT_API_KEY'),
+            base_url="https://api.moonshot.cn/v1"
+        )
 
     elif cfg.model.startswith("qwen"):
         from openai import OpenAI
-        # We use llama api here. See the available models at https://docs.llama-api.com/quickstart#available-models
-        client = OpenAI(api_key="sk-0964d3e1695e41a38ef8ec2d45d7c762", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+        # assert os.getenv('QWEN_API_KEY') is not None, \
+        #     "Please set the environment variable QWEN_API_KEY"
+        client = OpenAI(
+            api_key="sk-92c5a2abed7a4f2c9d86a6555a4ce925", 
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
 
-    # elif cfg.model.startswith("qwen2"):
-    #     url = 'http://222.20.98.39:8533/api/chat'
-    #     data = {
-    #         "model": "qwen2-coder:7b",
-    #         "messages": [
-    #             {"role": "system", "content": "你是一个代码工程师"},
-    #             {"role": "user", "content": " "}
-    #         ],
-    #         "stream": False
-    #     }
     else:
         from openai import OpenAI
-        # We use llama api here. See the available models at https://docs.llama-api.com/quickstart#available-models
-        base_url = "http://222.20.98.40:8533/v1/"
+        # Default: use local or custom OpenAI-compatible API
+        base_url = os.getenv('CUSTOM_API_BASE_URL', 'http://localhost:8000/v1/')
         client = OpenAI(api_key="EMPTY", base_url=base_url)
         
 
-def file_to_string(filename):
-    with open(filename, 'r') as file:
+def file_to_string(filename: str) -> str:
+    """Read entire file content as a string.
+    
+    Args:
+        filename: Path to the file
+        
+    Returns:
+        File content as string
+    """
+    with open(filename, 'r', encoding='utf-8') as file:
         return file.read()
 
-def filter_traceback(s):
+def filter_traceback(s: str) -> str:
+    """Extract traceback error message from output string.
+    
+    Args:
+        s: Output string that may contain traceback
+        
+    Returns:
+        Traceback message if found, empty string otherwise
+    """
     lines = s.split('\n')
     filtered_lines = []
     for i, line in enumerate(lines):
@@ -72,17 +82,26 @@ def filter_traceback(s):
                     break
                 filtered_lines.append(lines[j])
             return '\n'.join(filtered_lines)
-    return ''  # Return an empty string if no Traceback is found
+    return ''
 
-def block_until_running(stdout_filepath, log_status=False, iter_num=-1, response_id=-1):
-    # Ensure that the evaluation has started before moving on
+def block_until_running(stdout_filepath: str, log_status: bool = False, 
+                       iter_num: int = -1, response_id: int = -1) -> None:
+    """Block execution until the evaluation process has started writing output.
+    
+    Args:
+        stdout_filepath: Path to the stdout file to monitor
+        log_status: Whether to log execution status
+        iter_num: Current iteration number for logging
+        response_id: Response ID for logging
+    """
     while True:
         log = file_to_string(stdout_filepath)
-        if  len(log) > 0:
-            if log_status and "Traceback" in log:  # 如果存在则会出现"Traceback"
-                logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
-            else:
-                logging.info(f"Iteration {iter_num}: Code Run {response_id} successful!")
+        if len(log) > 0:
+            if log_status:
+                if "Traceback" in log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                else:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} successful!")
             break
 
 
@@ -146,13 +165,22 @@ def chat_completion(n: int, messages: list[dict], model: str, temperature: float
     return response_cur.choices
 
 
-def extract_code_from_generator(content):
-    """Extract code from the response of the code generator."""
+def extract_code_from_generator(content: str) -> str:
+    """Extract Python code from LLM response.
+    
+    Args:
+        content: LLM response text
+        
+    Returns:
+        Extracted Python code string or None if no valid code found
+    """
+    # Try to extract code from markdown code block
     pattern_code = r'```python(.*?)```'
-    code_string = re.search(pattern_code, content, re.DOTALL)
-    code_string = code_string.group(1).strip() if code_string is not None else None
+    code_match = re.search(pattern_code, content, re.DOTALL)
+    code_string = code_match.group(1).strip() if code_match else None
+    
+    # Fallback: extract function definition manually
     if code_string is None:
-        # Find the line that starts with "def" and the line that starts with "return", and extract the code in between
         lines = content.split('\n')
         start = None
         end = None
@@ -163,46 +191,72 @@ def extract_code_from_generator(content):
                 end = i
                 break
         if start is not None and end is not None:
-            code_string = '\n'.join(lines[start:end+1])
+            code_string = '\n'.join(lines[start:end + 1])
     
-    if code_string is None: 
+    # Validate extracted code
+    if code_string is None:
         return None
     
-    if "return" not in code_string: # 如果return语句都没有
+    if "return" not in code_string:
         return None
     
-    # Add import statements if not present
-    if "np" in code_string:
+    # Add missing import statements
+    if "np" in code_string and "import numpy" not in code_string:
         code_string = "import numpy as np\n" + code_string
-    if "torch" in code_string:
+    if "torch" in code_string and "import torch" not in code_string:
         code_string = "import torch\n" + code_string
+    
     return code_string
 
 
-def filter_code(code_string):
-    """Remove lines containing signature and import statements."""
+def filter_code(code_string: str) -> str:
+    """Remove function signature and import statements from code.
+    
+    Keeps only the function body up to and including the return statement.
+    
+    Args:
+        code_string: Python code string
+        
+    Returns:
+        Filtered code containing only the function body
+    """
     if code_string is None:
-        return ""  # Return an empty string if code_string is None
+        return ""
+    
     lines = code_string.split('\n')
     filtered_lines = []
+    
     for line in lines:
+        # Skip function definition, imports
         if line.startswith('def'):
             continue
         elif line.startswith('import'):
             continue
         elif line.startswith('from'):
             continue
+        # Include return statement and stop
         elif line.startswith('return'):
             filtered_lines.append(line)
             break
+        # Include function body
         else:
             filtered_lines.append(line)
-    code_string = '\n'.join(filtered_lines)
-    return code_string
+    
+    return '\n'.join(filtered_lines)
 
 
-def get_heuristic_name(module, possible_names: list[str]):
+def get_heuristic_name(module, possible_names: list[str]) -> str:
+    """Find the first function name from possible_names that exists in module.
+    
+    Args:
+        module: Python module to search
+        possible_names: List of possible function names
+        
+    Returns:
+        Name of the first matching function found, or None
+    """
     for func_name in possible_names:
         if hasattr(module, func_name):
             if inspect.isfunction(getattr(module, func_name)):
                 return func_name
+    return None

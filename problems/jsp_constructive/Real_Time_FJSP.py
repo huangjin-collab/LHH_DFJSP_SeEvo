@@ -6,10 +6,10 @@ from typing import List
 
 import numpy as np
 
-# ---------------- 如果有新版表达式优先用 ----------------
+# ---------------- Use new version expression if available ----------------
 try:
     from gpt import get_combined_expression_v2 as get_combined_expression
-except ImportError:                       # fallback
+except ImportError:                       # Fallback to base version
     from gpt import get_combined_expression
 
 
@@ -32,7 +32,7 @@ class Job:
         self.eachope_fle = eachope_fle
         self.job_machs   = job_machs
 
-        # -------- 名义 / 实际 pt --------
+        # -------- Nominal / Actual processing times --------
         self.nominal_pts = np.array(
             [plan_pts[i].sum() / eachope_fle[i] for i in range(num_op)],
             dtype=float,
@@ -43,19 +43,19 @@ class Job:
         self.job_actual_machs = np.zeros(num_op, dtype=int)
         self.sel_cand_idx     = np.full(num_op, -1, dtype=int)
 
-        # -------- 状态 --------
+        # -------- State variables --------
         self.op = 0
-        self.ope_machproc = np.zeros((4, num_op))   # 0就绪1开始2结束3已加工
-        self.ope_machproc[0][0] = 1                 # 首工序就绪
+        self.ope_machproc = np.zeros((4, num_op))   # 0=ready, 1=started, 2=finished, 3=processed
+        self.ope_machproc[0][0] = 1                 # First operation is ready
         self.done = False
 
-        # -------- EMA --------
+        # -------- EMA tracking --------
         self.kappa = kappa
         self.pt_dev_ema: float = 0.0
 
         self._update()
 
-    # -------- 统计量刷新 --------
+    # -------- Update statistics --------
     def _update(self):
         self.jtwk = self.job_actual_pts.sum()
         if self.done:
@@ -69,7 +69,7 @@ class Job:
         else:
             self.jrm = self.jso = 0.0
 
-    # -------- EMA 更新 --------
+    # -------- Update EMA --------
     def update_ema(self, realised: float, nominal: float):
         dev = realised / nominal - 1.0
         self.pt_dev_ema = self.kappa * dev + (1 - self.kappa) * self.pt_dev_ema
@@ -80,20 +80,20 @@ class Job:
 # ======================================================================
 class Machine:
     def __init__(self, idx: int):
-        self.idx = idx                             # 0‑based
+        self.idx = idx                             # 0-based index
         self.buffer: List[Job] = []
-        self.processing = np.zeros(3)              # [job+1, op+1, processed]
+        self.processing = np.zeros(3)              # [job+1, op+1, processed_time]
         self.proc_time = 0.0
         self.available = True
         self.uti = 0.0
         self.buffer_completion_time = 0.0
 
-    # ---------- 利用率 ----------
+    # ---------- Machine utilization ----------
     def util(self, now: float) -> float:
         self.uti = 0.0 if now == 0 else round(self.proc_time / now, 3)
         return self.uti
 
-    # ---------- 缓冲区 + 正在加工 剩余 ----------
+    # ---------- Buffer + processing remaining time ----------
     def get_buffer_completion_time(self, Jobs: List[Job]) -> float:
         t = 0.0
         if self.processing[0] != 0:
@@ -105,11 +105,11 @@ class Machine:
         return t
 
 # ======================================================================
-#                     3.  主环境  RealTimeFJSPDual
+#                     3.  Main Environment - RealTimeFJSPDual
 # ======================================================================
 class RealTimeFJSPDual:
     def __init__(self, plan: dict, real: dict, kappa: float = 0.20):
-        # ---------- 静态 ----------
+        # ---------- Static data ----------
         self._plan_orig = plan
         self._real_orig = real
         self.plan = copy.deepcopy(plan)
@@ -120,10 +120,10 @@ class RealTimeFJSPDual:
         self.order_num = plan["order_num"]
         self.fault_num = plan["mach_fault"]["fault_num"]
 
-        # ---------- 订单 1 ----------
+        # ---------- Order 1 (initial) ----------
         self._load_order(plan["order_1"], real["order_1"], first=True)
 
-        # ---------- 故障 ----------
+        # ---------- Machine faults ----------
         self.fault_idx  = plan["mach_fault"]["fault_index"].copy()
         self.fault_t0   = plan["mach_fault"]["fault_start_time"].copy()
         self.fault_t1   = plan["mach_fault"]["fault_end_time"].copy()
@@ -133,15 +133,19 @@ class RealTimeFJSPDual:
         self.true_fault_t1 = np.full_like(self.fault_t1, np.nan, dtype=float)
         self.over_fault_num = 0
 
-        # ---------- 运行时 ----------
+        # ---------- Runtime state ----------
         self.Machs = [Machine(i) for i in range(self.mach_num)]
         self.current_t = 0.0
-        self.over_order_num = 1     # 已进入系统的订单数
+        self.over_order_num = 1     # Number of orders entered into system
+
+        # ---------- Simple EMA statistics ----------
+        self.ema_sum = 0.0
+        self.ema_count = 0
 
         self.makespan = self.get_makespan()
 
     # ------------------------------------------------------------------
-    #  把一个订单数据拼到全局数组
+    #  Load order data into global arrays
     # ------------------------------------------------------------------
     def _load_order(self, plan_ord: dict, real_ord: dict, *, first=False):
         if first:
@@ -175,7 +179,7 @@ class RealTimeFJSPDual:
         self.job_num = len(self.Jobs)
 
     # ------------------------------------------------------------------
-    #  ========== 特征构造 ==========
+    #  ========== Feature generation ==========
     # ------------------------------------------------------------------
     def _gen_job_feats(self):
         cur = np.array([j.cur_op_pt  for j in self.pool], dtype=np.float32)
@@ -204,10 +208,10 @@ class RealTimeFJSPDual:
         return mach_ids, nom_pts, uti
 
     # ------------------------------------------------------------------
-    #  ========== 外层一步 ==========
+    #  ========== Main step (outer loop) ==========
     # ------------------------------------------------------------------
     def step(self) -> bool:
-        # ---------- 1) 选 Job ----------
+        # ---------- 1) Select Job ----------
         cur, wkr, rm, so, twk, ema = self._gen_job_feats()
         # print(ema)
         score = get_combined_expression(cur, wkr, rm, so, twk, ema)
@@ -215,25 +219,25 @@ class RealTimeFJSPDual:
         job_idx_pool = int(np.argmin(score))
         Ji = self.pool.pop(job_idx_pool)
 
-        # ---------- 2) 选 Machine ----------
+        # ---------- 2) Select Machine ----------
         mach_ids, nom_vec, uti_vec = self._gen_mach_feats(Ji)
-        sel_mach = int(mach_ids[np.argmin(nom_vec)])     # 示例：名义 pt 最小
+        sel_mach = int(mach_ids[np.argmin(nom_vec)])     # Example: select machine with minimum nominal pt
 
-        # 记录所选柔性下标
+        # Record selected flexibility index
         Ji.sel_cand_idx[Ji.op] = np.where(
             self.eachope_mach[Ji.job_index][Ji.op] == sel_mach)[0][0]
         Ji.job_actual_machs[Ji.op] = sel_mach
 
-        # 放入缓冲
+        # Add to machine buffer
         self.Machs[sel_mach-1].buffer.append(Ji)
 
-        # ---------- 3) 时间推进 ----------
+        # ---------- 3) Time advancement ----------
         done = self._forward()
         self.makespan = self.get_makespan()
         return done
 
     # ------------------------------------------------------------------
-    #  ========== 时间推进核心 ==========
+    #  ========== Core time advancement ==========
     # ------------------------------------------------------------------
     def _forward(self) -> bool:
         if self.pool:
@@ -242,17 +246,17 @@ class RealTimeFJSPDual:
         while True:
             statetran = np.full(self.mach_num, np.inf)
 
-            # ---- 遍历机器 ----
+            # ---- Iterate through machines ----
             for mi in self.Machs:
                 if not mi.available:
                     continue
 
-                if mi.processing[0] != 0:     # 正在加工
+                if mi.processing[0] != 0:     # Currently processing
                     ji = self.Jobs[int(mi.processing[0]) - 1]
                     statetran[mi.idx] = (
                         ji.job_actual_pts[int(mi.processing[1]) - 1] - mi.processing[2]
                     )
-                elif mi.buffer:              # 空闲但有缓冲
+                elif mi.buffer:              # Idle but has buffer
                     ji = mi.buffer.pop(0)
                     ji.ope_machproc[1][ji.op] = self.current_t
 
@@ -262,16 +266,20 @@ class RealTimeFJSPDual:
 
                     ji.job_actual_pts[ji.op] = real_pt
                     ji.update_ema(real_pt, nominal)
+                    
+                    # Simple EMA tracking
+                    self.ema_sum += abs(ji.pt_dev_ema)
+                    self.ema_count += 1
 
                     statetran[mi.idx] = real_pt
                     mi.processing[:] = [ji.job_index + 1, ji.op + 1, 0.0]
 
-            # ---- 动态事件 & 全局最短 ----
+            # ---- Dynamic events & global minimum ----
             dt = np.min(statetran)
             dt = self._dynamic(dt)
             self.current_t += dt
 
-            # ---- 同步推进 ----
+            # ---- Synchronous advancement ----
             for mi in self.Machs:
                 if not mi.available or mi.processing[0] == 0:
                     continue
@@ -282,7 +290,7 @@ class RealTimeFJSPDual:
                 mi.processing[2]       += dt
                 mi.proc_time           += dt
 
-                # 工序完成？
+                # Operation complete?
                 if ji.ope_machproc[3][op] >= ji.job_actual_pts[op]:
                     ji.ope_machproc[2][op] = ji.ope_machproc[1][op] + ji.job_actual_pts[op]
                     mi.processing[:] = 0.0
@@ -291,24 +299,24 @@ class RealTimeFJSPDual:
                         ji.ope_machproc[0][ji.op] = 1
                         ji._update()
                         self.pool.append(ji)
-                    else:                      # job 完成
+                    else:                      # Job complete
                         ji.done = True
                         ji._update()
 
-            # ---- 结束判断 ----
+            # ---- Termination check ----
             if all(ji.done for ji in self.Jobs):
                 return True
             if self.pool:
                 return False
 
     # ------------------------------------------------------------------
-    #  ========== 动态事件（订单 & 故障） ==========
+    #  ========== Dynamic events (Orders & Faults) ==========
     # ------------------------------------------------------------------
     def _dynamic(self, dt: float) -> float:
         inf = np.inf
         next_t = inf
 
-        # ------ 订单 ------
+        # ------ Order arrival ------
         if (self.order_num - self.over_order_num > 0 and
             self.current_t + dt >
             self.plan[f"order_{self.over_order_num+1}"]["arr_time"]):
@@ -317,7 +325,7 @@ class RealTimeFJSPDual:
         else:
             order_t = inf
 
-        # ------ 故障开始 ------
+        # ------ Fault start ------
         if (self.fault_num - self.over_fault_num > 0 and
             not np.isnan(self.true_fault_t0).all() and
             np.nanmin(self.true_fault_t0) < self.current_t + dt):
@@ -326,7 +334,7 @@ class RealTimeFJSPDual:
         else:
             fs_t = inf
 
-        # ------ 故障结束 ------
+        # ------ Fault end ------
         if (not np.isnan(self.true_fault_t1).all() and
             np.nanmin(self.true_fault_t1) < self.current_t + dt):
             fe_t = np.nanmin(self.true_fault_t1)
@@ -334,18 +342,18 @@ class RealTimeFJSPDual:
         else:
             fe_t = inf
 
-        # ========== 无事件 ==========
+        # ========== No event ==========
         if next_t is inf:
             return dt
 
-        # ========== 订单到达 ==========
+        # ========== Order arrival event ==========
         if next_t == order_t:
             n = self.over_order_num + 1
             self.over_order_num = n
             self._load_order(self.plan[f"order_{n}"], self.real[f"order_{n}"], first=False)
             return order_t - self.current_t
 
-        # ========== 故障开始 ==========
+        # ========== Fault start event ==========
         if next_t == fs_t:
             idx = int(np.nanargmin(self.true_fault_t0))
             m_idx = int(self.fault_idx[idx]-1)
@@ -354,7 +362,7 @@ class RealTimeFJSPDual:
             self.true_fault_t1[idx] = self.fault_t1[idx]
             self.over_fault_num += 1
 
-            # 撤掉正在加工工序 & 缓冲
+            # Remove current processing operation & buffer
             if self.Machs[m_idx].processing[0]:
                 ji = self.Jobs[int(self.Machs[m_idx].processing[0]) - 1]
                 op = ji.op
@@ -367,7 +375,7 @@ class RealTimeFJSPDual:
             self.Machs[m_idx].buffer.clear()
             return fs_t - self.current_t
 
-        # ========== 故障结束 ==========
+        # ========== Fault end event ==========
         if next_t == fe_t:
             idx = int(np.nanargmin(self.true_fault_t1))
             m_idx = int(self.fault_idx[idx]-1)
@@ -375,10 +383,10 @@ class RealTimeFJSPDual:
             self.true_fault_t1[idx] = np.nan
             return fe_t - self.current_t
 
-        return dt   # 理论不会到这
+        return dt   # Should not reach here in theory
 
     # ------------------------------------------------------------------
-    #  ========== 计算 makespan ==========
+    #  ========== Calculate makespan ==========
     # ------------------------------------------------------------------
     def get_makespan(self) -> float:
         ms = 0.0
@@ -388,7 +396,16 @@ class RealTimeFJSPDual:
         return ms
 
     # ------------------------------------------------------------------
-    #  ========== 重置 ==========
+    #  ========== Simple EMA statistics ==========
+    # ------------------------------------------------------------------
+    def get_avg_ema(self) -> float:
+        """Get average EMA magnitude."""
+        if self.ema_count == 0:
+            return 0.0
+        return self.ema_sum / self.ema_count
+
+    # ------------------------------------------------------------------
+    #  ========== Reset environment ==========
     # ------------------------------------------------------------------
     def reset(self):
         self.__init__(self._plan_orig, self._real_orig, self.kappa)

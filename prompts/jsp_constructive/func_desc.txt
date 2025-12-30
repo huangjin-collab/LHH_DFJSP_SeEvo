@@ -5,6 +5,15 @@ wkr: Remaining processing time for all workpieces.
 rm: Remaining processing time for all workpieces except the current operation.
 so: Processing time of the succeeding operation for all workpieces.
 twk: Total processing time for all workpieces.
-ema: Exponential Moving Average of the relative deviation between the realised and nominal processing times that a workpiece has experienced so far, ema = 0.2·(realised/nominal ‑ 1) + 0.8·ema_prev.
+ema: **Exponential Moving Average** - A critical feature for handling uncertainty. It tracks the relative deviation between realized and nominal processing times: ema = 0.2·(realized/nominal - 1) + 0.8·ema_prev. 
+     - Positive ema indicates operations tend to take longer than planned
+     - Negative ema indicates operations complete faster than planned
+     - Using ema allows the heuristic to anticipate future time fluctuations and adapt priorities accordingly
+     - This is the key mechanism for robust scheduling under fuzzy processing times
 
-The composite expression can include combinations of "+","-", and "*" to represent the relationships between these variables in the scheduling algorithm.
+The composite expression can include combinations of "+","-", "*", and "/" to represent the relationships between these variables in the scheduling algorithm.
+
+**Important**: Consider incorporating ema to make your heuristic adaptive to time uncertainties. For example:
+- Adjust priorities based on deviation trends: pt * (1 + ema)
+- Balance urgency with reliability: wkr + pt * ema
+- Penalize jobs with high positive ema (running late): pt + wkr * (1 + abs(ema))

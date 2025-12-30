@@ -12,15 +12,16 @@ os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 from utils.utils import *
 import random
 
-class ReEvo:
-    """Reflective Evolution (ReEvo) Algorithm.
+class SeEvo:
+    """Self-Evolution (SeEvo) Algorithm.
     
-    An LLM-based evolutionary algorithm that uses reflection mechanisms
-    to evolve heuristics for optimization problems.
+    An LLM-based evolutionary algorithm that combines population inter-evolution,
+    individual self-evolution, and reflection mechanisms to evolve heuristics
+    for optimization problems.
     """
     
     def __init__(self, cfg, root_dir, case_num) -> None:
-        """Initialize ReEvo algorithm.
+        """Initialize SeEvo algorithm.
         
         Args:
             cfg: Configuration object containing algorithm parameters
@@ -675,19 +676,71 @@ class ReEvo:
         )
         return response_lst, older_code_lst, now_code_list
 
+    def _generate_evolution_trend_summary(self) -> str:
+        """Generate a summary of evolution trends based on performance history.
+        
+        Returns:
+            String describing evolution trends and performance patterns
+        """
+        if len(self.improvement_history) < 2:
+            return ""
+        
+        # Calculate statistics
+        total_improvement = sum(self.improvement_history)
+        recent_improvements = self.improvement_history[-3:]  # Last 3 iterations
+        avg_improvement = np.mean([x for x in self.improvement_history if x > 0]) if any(x > 0 for x in self.improvement_history) else 0
+        
+        # Determine trend
+        if sum(recent_improvements) > 0:
+            trend = "improving"
+        elif all(x == 0 for x in recent_improvements):
+            trend = "stagnant"
+        else:
+            trend = "fluctuating"
+        
+        # Calculate convergence
+        if len(self.best_obj_history) >= 3:
+            recent_variance = np.var(self.best_obj_history[-3:])
+            convergence_status = "converging" if recent_variance < 0.01 else "still exploring"
+        else:
+            convergence_status = "early stage"
+        
+        summary = (
+            f"\n\n**Evolution Progress Summary:**\n"
+            f"- Current iteration: {self.iteration}\n"
+            f"- Total improvement achieved: {total_improvement:.4f}\n"
+            f"- Current best objective: {self.best_obj_overall:.4f}\n"
+            f"- Average improvement per successful iteration: {avg_improvement:.4f}\n"
+            f"- Evolution trend: {trend}\n"
+            f"- Convergence status: {convergence_status}\n"
+        )
+        
+        # Add strategic guidance based on trend
+        if trend == "stagnant":
+            summary += "\n**Guidance**: Consider more radical variations or exploring underutilized features (e.g., EMA for uncertainty adaptation).\n"
+        elif trend == "improving":
+            summary += "\n**Guidance**: The current direction is promising. Refine successful patterns while maintaining diversity.\n"
+        elif convergence_status == "converging":
+            summary += "\n**Guidance**: Solutions are converging. Focus on fine-tuning and robust adaptations.\n"
+        
+        return summary
+    
     def long_term_reflection(self, short_term_reflections: list[str]) -> None:
         """Perform long-term reflection by aggregating short-term insights.
         
         Args:
             short_term_reflections: List of short-term reflection responses
         """
-        # Create long-term reflection prompt
+        # Generate evolution trend summary
+        trend_summary = self._generate_evolution_trend_summary()
+        
+        # Create long-term reflection prompt with evolution context
         system = self.system_reflector_prompt
         user = self.user_reflector_lt_prompt.format(
             problem_desc=self.problem_desc,
             prior_reflection=self.long_term_reflection_str,
             new_reflection="\n".join(short_term_reflections),
-        )
+        ) + trend_summary
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         
         # Log prompt for the first iteration only

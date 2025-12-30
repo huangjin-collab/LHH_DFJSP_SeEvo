@@ -1,64 +1,29 @@
 import numpy as np
-import numpy as np
-
-def get_combined_expression_v2(
-    pt: np.ndarray,
-    wkr: np.ndarray,
-    rm: np.ndarray,
-    so: np.ndarray,
-    twk: np.ndarray,
-    ema: np.ndarray
-) -> np.ndarray:
-    """
-    Improved composite scheduling priority function for JSP constructive heuristics.
-    It features smooth EMA modulation bounded within moderate ranges, partial scale
-    normalization preserving workload information, progress-weighted lookahead, and
-    additive blending of priority terms.
-
-    Args:
-        pt (np.ndarray): Processing time of current operation per workpiece.
-        wkr (np.ndarray): Remaining processing time per workpiece.
-        rm (np.ndarray): Remaining processing time excluding current operation per workpiece.
-        so (np.ndarray): Processing time of succeeding operation per workpiece.
-        twk (np.ndarray): Total processing time of all workpieces.
-        ema (np.ndarray): Exponential moving average of relative deviation per workpiece.
-
-    Returns:
-        np.ndarray: Combined priority scores per operation for scheduling.
-    """
-    eps = 1e-12
-
-    # Prevent zero or near-zero total workload
-    twk_safe = np.maximum(twk, eps)
-
-    # Calculate progress ratio clipped to [0,1]
-    progress = np.clip((twk_safe - wkr) / twk_safe, 0.0, 1.0)
-
-    # Bound EMA to moderate range to avoid noisy extremes
-    ema_clipped = np.clip(ema, -0.3, 0.3)
-
-    # Smooth modulation factor around 1.0 controlled by EMA
-    ema_factor = 1.0 + 0.2 * ema_clipped
-
-    # Partial normalization of times by total workload plus small offset to keep scale info but prevent imbalance
-    norm_factor = twk_safe + 10 * eps
-    pt_norm = pt / norm_factor
-    rm_norm = rm / norm_factor
-    so_norm = so / norm_factor
-
-    # Current term emphasizes current op processing time scaled by remaining workload and EMA
-    current_term = pt_norm * rm * ema_factor
-
-    # Lookahead term emphasizes next operation weighted by progress and EMA factor
-    lookahead_term = so * progress * ema_factor
-
-    # Synergy term: mild multiplicative interaction for sequential operation demand
-    synergy_term = 0.12 * current_term * lookahead_term
-
-    # Sum terms additively for smooth combined priority
-    combined = current_term + lookahead_term + synergy_term
-
-    # Ensure no negative priorities and keep bounded reasonable range (clipped above zero)
-    combined_clipped = np.clip(combined, a_min=0.0, a_max=None)
-
-    return combined_clipped
+def get_combined_expression_v2(pt: np.ndarray, wkr: np.ndarray, rm: np.ndarray, so: np.ndarray, twk: np.ndarray, ema: np.ndarray) -> np.ndarray: 
+    # Adaptive current processing time: amplify pt for jobs with positive EMA (running late)
+    adjusted_pt = pt * (1 + ema)
+    
+    # Enhanced look-ahead urgency: include both remaining work and successor operation impact
+    # Weighted sum to emphasize bottleneck traversal; high so increases priority of current job
+    lookahead_urgency = rm + 0.6 * so
+    
+    # Uncertainty-aware workload pressure: penalize jobs with high deviation trends
+    uncertain_workload = wkr * (1 + np.abs(ema))
+    
+    # Normalized pressure to balance across jobs of different scales
+    normalized_pressure = uncertain_workload / (twk + 1e-8)
+    
+    # Composite expression combines adaptive local cost, global lookahead, and scaled penalty
+    # Subtractive term for normalized_pressure increases priority contrast (higher pressure ¡ú lower score)
+    combined_expression_data = adjusted_pt + lookahead_urgency - 0.4 * normalized_pressure
+    
+    # Optional: apply mild non-linearity only if EMA magnitude is high (adaptive response under high uncertainty)
+    # This preserves gradient distinctions while enhancing sensitivity when needed
+    mask = np.abs(ema) > 0.3  # Only amplify in high-deviation scenarios
+    combined_expression_data = np.where(
+        mask,
+        np.tanh(combined_expression_data),
+        combined_expression_data
+    )
+    
+    return combined_expression_data

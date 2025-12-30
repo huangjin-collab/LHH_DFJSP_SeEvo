@@ -1,12 +1,34 @@
-Below are two {func_name} functions for {problem_desc}
+## Task: Analyze Performance Difference
+
+You are comparing two {func_name} functions for {problem_desc}
+
+**Problem Description:**
 {func_desc}
 
-You are provided with two code versions below, where the second version performs better than the first one.
+**Performance Comparison:**
+- Code Version 1 (Lower Performance): See below
+- Code Version 2 (Higher Performance): See below
 
-[Worse code]
+### [Code Version 1 - Lower Performance]
+```python
 {worse_code}
+```
 
-[Better code]
+### [Code Version 2 - Higher Performance]
+```python
 {better_code}
+```
 
-You respond with some hints for designing better heuristics, based on the two code versions and using less than 30 words.
+---
+
+**Your Task:**
+Analyze why Code Version 2 performs better and provide actionable insights for future improvements.
+
+**Requirements:**
+- Identify key algorithmic differences
+- Explain why these differences lead to better performance
+- Suggest design principles to apply going forward
+- Keep your response concise (under 50 words)
+
+**Output Format:**
+Provide 2-3 concrete insights, each on a new line starting with "-"

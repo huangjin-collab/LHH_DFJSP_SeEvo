@@ -1,59 +1,60 @@
 import hydra
-import logging 
+import logging
 import os
+import sys
 from pathlib import Path
 import subprocess
 from utils.utils import init_client
-import random
-ROOT_DIR = os.getcwd() # 获取当前目录
-python_executable = '/home/sshj/miniconda3/envs/fjsp/bin/python'
-logging.basicConfig(level=logging.INFO) # 配置日志记录系统
-@hydra.main(version_base=None, config_path="cfg", config_name="config") # 在主函数中，可以通过参数 cfg 访问配置文件的内容，并使用日志记录输出相关信息
+
+ROOT_DIR = os.getcwd()  # Get current working directory
+@hydra.main(version_base=None, config_path="cfg", config_name="config")
 
 def main(cfg):
     workspace_dir = Path.cwd()
-    # Set logging level
+    
+    # Log workspace and configuration information
     logging.info(f"Workspace: {workspace_dir}")
     logging.info(f"Project Root: {ROOT_DIR}")
     logging.info(f"Using LLM: {cfg.model}")
     logging.info(f"Using Algorithm: {cfg.algorithm}")
+    logging.info(f"Case num: {cfg.case_num}")
 
+    # Initialize LLM client
     init_client(cfg)
-    if cfg.algorithm == "reevo":
-        from reevo import ReEvo as LHH
+    
+    # Select and initialize algorithm
+    if cfg.algorithm == "seevo":
+        from seevo import SeEvo as Algorithm
+    elif cfg.algorithm == "reevo":
+        from reevo import ReEvo as Algorithm
     else:
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"Algorithm '{cfg.algorithm}' is not implemented. "
+            f"Available algorithms: 'seevo' (main), 'reevo' (baseline)"
+        )
 
-    # Main algorithm
-    logging.info(f"Case num: {[cfg.case_num]}")
-    lhh = LHH(cfg, ROOT_DIR, ([cfg.case_num]))
-    best_code_overall, best_code_path_overall = lhh.evolve()
+    # Run evolutionary algorithm
+    algorithm = Algorithm(cfg, ROOT_DIR, [cfg.case_num])
+    best_code_overall, best_code_path_overall = algorithm.evolve()
+    
     logging.info(f"Best Code Overall: {best_code_overall}")
     logging.info(f"Best Code Path Overall: {best_code_path_overall}")
     
-    # Run validation and redirect stdout to a file "best_code_overall_stdout.txt"
-    with open(f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/gpt.py", 'w') as file:
-        file.writelines(best_code_overall + '\n')
+    # Save best code and run validation
+    gpt_file_path = f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/gpt.py"
+    with open(gpt_file_path, 'w') as file:
+        file.write(best_code_overall + '\n')
+    
+    # Execute validation script
     test_script = f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/eval.py"
     test_script_stdout = "best_code_overall_val_stdout.txt"
-    # # logging.info(f"Running validation script...: {test_script}")
+    logging.info(f"Running validation script: {test_script}")
+    
     with open(test_script_stdout, 'w') as stdout:
-        subprocess.run([python_executable, test_script, "-1", ROOT_DIR, "val"], stdout=stdout)
+        subprocess.run([sys.executable, test_script, "-1", ROOT_DIR, "val"], 
+                      stdout=stdout, stderr=subprocess.STDOUT)
     
-    # Run validation and redirect stdout to a file "best_code_overall_stdout.txt"
-    # with open(f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/gpt.py", 'w') as file:
-    #     file.writelines(best_code_overall + '\n')
-    # test_script = f"{ROOT_DIR}/problems/{cfg.problem.problem_name}/eval.py"
-    # test_script_stdout = "best_code_overall_val_stdout.txt"
-    # # # logging.info(f"Running validation script...: {test_script}")
-    # with open(test_script_stdout, 'w') as stdout:
-    #     subprocess.run([python_executable, test_script, "-1", ROOT_DIR, "val"], stdout=stdout)
-    # logging.info(f"Validation script finished. Results are saved in {test_script_stdout}.")
-    
-    # Print the results
-    # with open(test_script_stdout, 'r') as file:
-    #     for line in file.readlines():
-    #         logging.info(line.strip())
+    logging.info(f"Validation script finished. Results saved in {test_script_stdout}")
 
 if __name__ == "__main__":
     main()

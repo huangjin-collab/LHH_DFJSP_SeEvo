@@ -1,1 +1,3 @@
-- Try look-ahead mechanisms.
+- Try look-ahead mechanisms (use `so` variable).
+- Leverage EMA to adapt to processing time uncertainties - this is critical for robust scheduling.
+- Consider EMA-adjusted metrics: pt*(1+ema), wkr*(1+abs(ema)).

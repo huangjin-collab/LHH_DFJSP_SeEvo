@@ -1,15 +1,34 @@
+## Task: Individual Self-Evolution
+
 {user_generator}
 
-[Older code]
+### [Previous Version (Baseline)]
 {func_signature0}
 {older_code}
 
-[New code]
+### [Current Version (Recently Generated)]
 {func_signature1}
 {new_code}
 
-[Reflection]
+### [Self-Reflection on Recent Evolution]
 {reflection}
 
-[Improved code]
-Please write an improved function `{func_name}_v2`, according to the reflection. Output code only and enclose your code with Python code block: ```python ... ```.
+---
+
+**Your Task:**
+Generate an improved `{func_name}_v2` function through self-evolution.
+
+**Self-Evolution Strategy:**
+1. Analyze the evolution from previous to current version
+2. Understand what worked and what didn't based on reflection
+3. Build upon successful changes
+4. Address identified weaknesses
+5. Push the design further with additional improvements
+
+**Requirements:**
+- Output ONLY Python code in a code block: ```python ... ```
+- Follow the function signature format
+- Ensure code is syntactically correct
+- Include brief inline comments for key improvements
+
+**Generate the self-evolved code below:**

@@ -1,7 +1,23 @@
-Below is your prior long-term reflection on designing heuristics for {problem_desc}
+## Task: Synthesize Long-Term Insights
+
+You are building cumulative knowledge for designing heuristics for {problem_desc}
+
+### [Prior Long-Term Reflection]
 {prior_reflection}
 
-Below are some newly gained insights.
+### [Newly Gained Insights]
 {new_reflection}
 
-Write constructive hints for designing better heuristics, based on prior reflections and new insights and using less than 30 words.
+---
+
+**Your Task:**
+Synthesize prior knowledge and new insights into an updated long-term reflection.
+
+**Requirements:**
+- Integrate new insights with existing knowledge
+- Remove redundant or contradictory information
+- Prioritize insights that consistently improve performance
+- Keep the synthesis concise (under 50 words)
+
+**Output Format:**
+Provide a cohesive summary of key design principles, each principle on a new line starting with "-"
