@@ -1,0 +1,15 @@
+Below are two {func_name} functions for {problem_desc}
+{func_desc}
+
+You are provided with two code versions below. The second version is generated from the first version based on the following hint, and the result of the second version became more {result} compared to the first. 
+
+[First version code]
+{first_version_code}
+
+[Second version code]
+{second_version_code}
+
+[hint]
+{hint}
+
+You respond with some hints for designing better heuristics for first version code, based on the two code versions and the prior hints, using less than 30 words.

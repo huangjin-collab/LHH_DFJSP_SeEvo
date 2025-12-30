@@ -1,0 +1,8 @@
+Below is your prior long-term reflection on designing heuristics for {problem_desc}
+{prior_reflection}
+
+Below are some newly gained insights, with corresponding new reflection results either improving (better) or worsening (bad) compared to before.
+{new_reflection}
+{new_reflection_result}
+
+Write constructive hints for designing better heuristics, based on prior reflections and new insights and using less than 30 words.

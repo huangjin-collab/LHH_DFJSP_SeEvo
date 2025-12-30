@@ -1,0 +1,10 @@
+The composite expression for scheduling job shop operations to determine the subsequent processing of workpieces comprises the following variables:
+
+pt: Processing time of the current operation for all workpieces.
+wkr: Remaining processing time for all workpieces.
+rm: Remaining processing time for all workpieces except the current operation.
+so: Processing time of the succeeding operation for all workpieces.
+twk: Total processing time for all workpieces.
+ema: Exponential Moving Average of the relative deviation between the realised and nominal processing times that a workpiece has experienced so far, ema = 0.2·(realised/nominal ‑ 1) + 0.8·ema_prev.
+
+The composite expression can include combinations of "+","-", and "*" to represent the relationships between these variables in the scheduling algorithm.

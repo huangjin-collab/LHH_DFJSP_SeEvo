@@ -1,0 +1,24 @@
+defaults:
+  - _self_
+  - problem: jsp_constructive
+  - override hydra/output: local
+
+hydra:
+  job:
+    chdir: True
+
+# The chosen algorithm
+algorithm: reevo # other options are "eoh", "ael"; some problems may not support "ael"
+
+# LLM parameters
+model: gpt-4.1-mini-2025-04-14 # #gpt-3.5-turbo-0125  # LLM model (other options include gpt-4-turbo-preview; GLM-3-Turbo, GLM-4; and moonshot-v1-8k) 
+temperature: 1  # temperature for chat completion
+case_num: 0
+
+# Main GA loop parameters
+max_fe: 6 # maximum number of function evaluations
+pop_size: 20 # population size for GA
+init_pop_size: 20 # initial population size for GA
+mutation_rate: 0.5 # mutation rate for GA
+timeout: 100 # timeout for evaluation of a single heuristic
+diversify_init_pop: True # whether to diversify the initial population

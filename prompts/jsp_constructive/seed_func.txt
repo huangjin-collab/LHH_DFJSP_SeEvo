@@ -1,0 +1,4 @@
+import numpy as np  
+def get_combined_expression_v1(pt: np.ndarray, wkr: np.ndarray, rm: np.ndarray, so: np.ndarray, twk: np.ndarray, ema: np.ndarray) -> np.ndarray:  
+    combined_expression_data = np.sin(((pt) + np.sin(rm)))
+    return combined_expression_data

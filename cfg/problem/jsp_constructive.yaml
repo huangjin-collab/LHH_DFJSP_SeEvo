@@ -1,0 +1,6 @@
+problem_name: jsp_constructive
+problem_type: constructive
+obj_type: min
+problem_size: 50 # problem size for training
+func_name: get_combined_expression
+description: Solving Job Shop Scheduling Problem (JSP) with constructive heuristics. JSP requires achieving the minimum makespan through effective production arrangement of workpieces and operations..

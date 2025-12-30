@@ -1,0 +1,1 @@
+def get_combined_expression_v{version}(pt: np.ndarray, wkr: np.ndarray, rm: np.ndarray, so: np.ndarray, twk: np.ndarray, ema: np.ndarray) -> np.ndarray: 

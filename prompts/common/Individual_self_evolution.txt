@@ -1,0 +1,15 @@
+{user_generator}
+
+[Older code]
+{func_signature0}
+{older_code}
+
+[New code]
+{func_signature1}
+{new_code}
+
+[Reflection]
+{reflection}
+
+[Improved code]
+Please write an improved function `{func_name}_v2`, according to the reflection. Output code only and enclose your code with Python code block: ```python ... ```.

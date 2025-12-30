@@ -1,0 +1,4 @@
+test_instance 期望保存不含工件插单、机器故障修复单纯FJSP问题
+test_instance1 期望保存工件插单FJSP问题
+test_instance2 期望保存机器故障修复FJSP问题
+test_instance3 期望保存工件插单、机器故障修复FJSP问题
