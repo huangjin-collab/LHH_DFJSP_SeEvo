@@ -1,0 +1,67 @@
+```python
+import numpy as np
+
+def get_combined_expression_v2(
+    pt: np.ndarray,
+    wkr: np.ndarray,
+    rm: np.ndarray,
+    so: np.ndarray,
+    twk: np.ndarray,
+    ema: np.ndarray,
+) -> np.ndarray:
+    eps = 1e-12
+
+    # Safe normalization relative to total workload (twk), clip to [0,1] for stability
+    norm_pt = np.clip(pt / (twk + eps), 0.0, 1.0)
+    norm_wkr = np.clip(wkr / (twk + eps), 0.0, 1.0)
+    norm_rm = np.clip(rm / (twk + eps), 0.0, 1.0)
+    norm_so = np.clip(so / (twk + eps), 0.0, 1.0)
+
+    # Clip EMA deviations to a moderate range to avoid instability but keep sensitivity
+    ema_clipped = np.clip(ema, -0.3, 0.3)
+
+    # Smooth nonlinear transforms on EMA for graded influence with saturation
+    tanh_ema = np.tanh(5.0 * ema_clipped)    # sharpen sensitivity around zero with saturation
+    abs_ema = np.abs(ema_clipped)
+    sigmoid_ema = 1 / (1 + np.exp(-12 * (ema_clipped + 0.15)))  # shift & sharpen for positive deviations
+
+    # Workload ratio emphasizes overall remaining load impact
+    workload_ratio = norm_wkr
+    workload_ratio_mid = 1 / (1 + np.exp(-15 * (workload_ratio - 0.5)))  # emphasize mid-range workloads
+
+    # Adaptive weights combining workload and EMA nonlinearities:
+    w_so = 1.0 + 0.65 * workload_ratio_mid + 0.4 * tanh_ema              # Succeeding op weighted higher at moderate load & positive EMA
+    w_pt = 1.0 - 0.3 * tanh_ema                                         # Slightly reduce current time with EMA influence (negative or positive)
+    w_rm = 0.35 + 0.55 * workload_ratio - 0.12 * tanh_ema               # Remaining minus scaled by workload and EMA damping
+    w_wkr_penalty = 0.22 + 0.56 * workload_ratio                        # Penalty on wkr grows with workload
+
+    # Lookahead scaled by succeeding operation weighted by EMA and workload influence
+    lookahead = norm_so * w_so
+
+    # Adjust current processing and remaining minus combination
+    adjusted_pt_rm = norm_pt * w_pt - norm_rm * w_rm
+
+    # Pre-combine additive term for smooth nonlinear modulation
+    additive_base = adjusted_pt_rm + lookahead
+
+    # Nonlinear synergy via tanh modulation with EMA scaling for smoothness and saturation
+    nonlinear_scale = 1 + 0.42 * tanh_ema
+    nonlinear_mod = np.tanh(additive_base * nonlinear_scale)
+    synergy = additive_base * nonlinear_scale + nonlinear_mod * 0.17
+
+    # Penalty softened by EMA but clipped to avoid excessive penalization
+    penalty_factor = np.clip(1 - 0.2 * tanh_ema, 0.68, 1.0)
+    penalty = w_wkr_penalty * norm_wkr * penalty_factor
+
+    # Composite expression before rescaling
+    combined = synergy - penalty
+
+    # Stabilize scale using max abs and tanh squeeze to constrain output in meaningful range
+    max_abs_combined = np.maximum(np.max(np.abs(combined)), eps)
+    combined_normalized = np.tanh(combined / max_abs_combined) * max_abs_combined
+
+    # Rescale combined back to original workload scale to retain interpretability
+    combined_expression = combined_normalized * (twk + eps)
+
+    return combined_expression
+```

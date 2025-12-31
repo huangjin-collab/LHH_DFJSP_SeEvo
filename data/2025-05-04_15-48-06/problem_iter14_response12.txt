@@ -1,0 +1,81 @@
+```python
+import numpy as np
+
+def get_combined_expression_v2(
+    pt: np.ndarray,
+    wkr: np.ndarray,
+    rm: np.ndarray,
+    so: np.ndarray,
+    twk: np.ndarray,
+    ema: np.ndarray,
+) -> np.ndarray:
+    """
+    Refined composite heuristic for JSP prioritization that smoothly balances current,
+    remaining, and lookahead workloads with EMA-based timing deviations.
+
+    Args:
+        pt (np.ndarray): Processing time of current operations per workpiece.
+        wkr (np.ndarray): Remaining processing time per workpiece.
+        rm (np.ndarray): Remaining processing time excluding current operation per workpiece.
+        so (np.ndarray): Processing time of succeeding operation per workpiece.
+        twk (np.ndarray): Total processing time per workpiece.
+        ema (np.ndarray): EMA of relative deviation (realised/nominal - 1) per workpiece.
+
+    Returns:
+        np.ndarray: Composite heuristic score, lower values signal higher priority.
+    """
+
+    # Prevent divide by zero with adaptive epsilon scaling with workload magnitude
+    eps = 1e-14 * np.maximum(twk, 1.0)
+
+    # Normalize inputs for scale-invariant operation
+    norm_pt = pt / (twk + eps)
+    norm_wkr = wkr / (twk + eps)
+    norm_rm = rm / (twk + eps)
+    norm_so = so / (twk + eps)
+
+    # Smooth workload-adaptive blending between current op and remainder
+    # Use a scaled & shifted softplus for smooth transition instead of step or sigmoid
+    transition_center = 0.215
+    transition_scale = 45.0
+    shifted_arg = transition_scale * (norm_wkr - transition_center)
+
+    # Numerically stable softplus approx and normalization between 0..1
+    log_denominator = np.log1p(np.exp(transition_scale * (1.0 - transition_center)))
+    softplus_numer = np.log1p(np.exp(shifted_arg))
+    transition = np.clip(softplus_numer / log_denominator, 0.0, 1.0)
+
+    blended_pt_rm = transition * norm_pt + (1.0 - transition) * norm_rm
+
+    # GELU-like bottleneck emphasis on succeeding op time for smooth nonlinear gating
+    bottleneck_scale = 7.8
+    bottleneck_cap = 2.3
+
+    x = norm_so * bottleneck_scale
+    x_cube = x ** 3
+    sqrt_2_over_pi = np.sqrt(2 / np.pi)
+    gelu = 0.5 * x * (1 + np.tanh(sqrt_2_over_pi * (x + 0.044715 * x_cube)))
+
+    bottleneck_factor = bottleneck_cap * np.tanh(gelu / bottleneck_cap)
+
+    # EMA impact smoothing with coherent asymmetric treatment
+    # Positive EMA (delays) penalized with tanh saturation ~0.6 max
+    # Negative EMA (ahead) linearly rewarded then softly capped
+    ema_pos_scale = 6.0
+    ema_pos_max = 0.6
+    pos_ema = np.tanh(ema_pos_scale * np.maximum(ema, 0)) * ema_pos_max
+
+    ema_neg_scale = 0.4
+    ema_neg_cap = -0.3
+    neg_ema = np.clip(ema_neg_scale * np.minimum(ema, 0), ema_neg_cap, 0.0)
+
+    ema_factor = 1.0 + pos_ema + neg_ema
+
+    # Tiny stability constant to prevent zero numerator
+    stability_const = 1e-12
+
+    # Compose final heuristic: blend workloads modulated by bottleneck and EMA
+    heuristic = (blended_pt_rm + stability_const) / (1.0 + bottleneck_factor) * ema_factor
+
+    return heuristic
+```

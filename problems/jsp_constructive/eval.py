@@ -20,11 +20,23 @@ if __name__ == "__main__":
     # Parse command line arguments
     mode = sys.argv[2]
     assert mode in ['train', 'val'], f"Invalid mode: {mode}. Must be 'train' or 'val'"
+    
+    # Get dataset mode (train or test) - default to train for backward compatibility
+    dataset_mode = sys.argv[4] if len(sys.argv) > 4 else "train"
 
-    # Set up paths
+    # Set up paths based on dataset mode
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    folder_path = os.path.join(base_dir, "test_data/jsp_cases")
-    real_folder_path = os.path.join(base_dir, "test_data/real_jsp_cases")
+    
+    if dataset_mode == "test":
+        # Test mode: use test dataset
+        folder_path = os.path.join(base_dir, "test_data/test_jsp")
+        real_folder_path = os.path.join(base_dir, "test_data/real_test_jsp")
+        print(f"[*] Using TEST dataset: {folder_path}")
+    else:
+        # Train mode: use training dataset
+        folder_path = os.path.join(base_dir, "test_data/jsp_cases")
+        real_folder_path = os.path.join(base_dir, "test_data/real_jsp_cases")
+        print(f"[*] Using TRAIN dataset: {folder_path}")
         
     values = []
 
@@ -34,7 +46,12 @@ if __name__ == "__main__":
         
         for idx, case_num in enumerate(case_numbers, 1):
             plan_filename = f"prob_{case_num:02d}.pkl"
-            real_filename = f"prob_{case_num:02d}_real.pkl"
+            
+            # Test dataset doesn't have _real suffix
+            if dataset_mode == "test":
+                real_filename = f"prob_{case_num:02d}.pkl"
+            else:
+                real_filename = f"prob_{case_num:02d}_real.pkl"
 
             plan_path = os.path.join(folder_path, plan_filename)
             real_path = os.path.join(real_folder_path, real_filename)

@@ -10,14 +10,17 @@ hydra:
 # The chosen algorithm
 algorithm: seevo # Options: "seevo" (main algorithm with self-evolution), "reevo" (baseline comparison method)
 
+# Execution mode
+mode: train  # Options: "train" (normal evolution from seed), "test" (load trained rules from data_dir and run one iteration)
+data_dir: data  # Directory to load trained rules from (only used in test mode)
+
 # LLM parameters
 model: qwen-plus # #gpt-3.5-turbo-0125  # LLM model (other options include gpt-4-turbo-preview; GLM-3-Turbo, GLM-4; and moonshot-v1-8k) 
-api_key: ""  # Fill your API key here directly (optional, will use environment variable if empty)
 temperature: 1  # temperature for chat completion
 case_num: 0
 
 # Main GA loop parameters
-max_fe: 6 # maximum number of function evaluations
+max_fe: 20 # maximum number of function evaluations
 pop_size: 20 # population size for GA
 init_pop_size: 20 # initial population size for GA
 mutation_rate: 0.5 # mutation rate for GA

@@ -1,0 +1,49 @@
+```python
+import numpy as np
+
+def get_combined_expression_v2(
+    pt: np.ndarray,
+    wkr: np.ndarray,
+    rm: np.ndarray,
+    so: np.ndarray,
+    twk: np.ndarray,
+    ema: np.ndarray
+) -> np.ndarray:
+    # Small epsilon for numerical stability
+    eps = 1e-8
+
+    # Soft normalization of total workload using tanh of log scale for smoother saturation
+    norm_twk = np.tanh(np.log1p(twk + eps))
+
+    # Normalize workloads relative to (1 + twk) to keep values in controlled range
+    norm_wkr = wkr / (1 + twk + eps)
+    norm_rm = rm / (1 + twk + eps)
+    norm_so = so / (1 + twk + eps)
+
+    # EMA scaling: smoothly penalize moderate deviations with sigmoid centered at zero,
+    # scaled and shifted to [-0.6, 0.6] for gentle impact
+    ema_scaled = (2 / (1 + np.exp(-5 * ema)) - 1) * 0.6
+
+    # Look-ahead term: emphasize next operation with nonlinear blending and EMA-weighted boost,
+    # apply soft sigmoid smoothing to avoid harsh jumps
+    lookahead_raw = pt + 0.85 * norm_so
+    lookahead = 1.2 * lookahead_raw * (1 + 0.5 * ema_scaled)
+    lookahead = np.tanh(lookahead)
+
+    # Workload balance using smooth difference of continuing vs succeeding ops, modulated by workload ratios;
+    # penalize large workload imbalance softly using tanh difference and multiply by remaining workload to emphasize backlog reduction
+    diff = norm_rm - norm_so
+    workload_balance = norm_wkr * np.tanh(3 * diff) * (1 - 0.3 * np.abs(ema_scaled))
+
+    # Stability term reduces impact if EMA volatility is large (softly using sigmoid), preventing oscillations
+    stability = 1 / (1 + 3 * np.abs(ema_scaled))
+    stability = np.clip(stability, 0.3, 1.0)  # maintain minimum stability floor
+
+    # Composite expression blending multiplicative and additive terms:
+    # - scale lookahead * workload_balance multiplicatively to capture interaction
+    # - add scaled pt term offset by stability to maintain influence of current operation time
+    # - normalize by smoothed total workload with saturation plus small offset to maintain scale comparability
+    combined = ((lookahead * workload_balance) + (stability * pt / (1 + twk + eps))) / (norm_twk + 0.15)
+
+    return combined
+```

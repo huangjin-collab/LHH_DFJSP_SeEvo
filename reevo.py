@@ -30,6 +30,7 @@ class ReEvo:
         self.cfg = cfg
         self.root_dir = root_dir
         self.case_num = case_num
+        self.mode = cfg.mode  # train or test
         
         # Algorithm parameters
         self.mutation_rate = cfg.mutation_rate
@@ -46,9 +47,10 @@ class ReEvo:
         # Reflection mechanism
         self.long_term_reflection_str = ""
         
-        # Performance tracking for intelligent evolution guidance
-        self.improvement_history = []  # Track improvement trends
-        self.best_obj_history = []      # Track best objective over iterations
+        # Performance tracking for intelligent evolution guidance (only in train mode)
+        if self.mode == "train":
+            self.improvement_history = []  # Track improvement trends
+            self.best_obj_history = []      # Track best objective over iterations
         
         # Initialize prompts and population
         self.init_prompt()
@@ -130,51 +132,92 @@ class ReEvo:
 
 
     def init_population(self) -> None:
-        """Initialize population with seed function and LLM-generated individuals."""
-        # Evaluate the seed function and set it as the initial individual
-        logging.info("Evaluating seed function...")
-        code = extract_code_from_generator(self.seed_func).replace("v1", "v2")
-        logging.info("Seed function code: \n" + code)
+        """Initialize population with seed function and LLM-generated individuals (train mode)
+        or load trained rules from data directory (test mode)."""
         
-        seed_ind = {
-            "stdout_filepath": f"problem_iter{self.iteration}_stdout0.txt",
-            "code_path": f"problem_iter{self.iteration}_code0.py",
-            "code": code,
-            "response_id": 0,
-        }
-        self.seed_ind = seed_ind
-        self.population = self.evaluate_population([self.seed_ind], self.case_num)
+        if self.mode == "test":
+            # Test mode: Load trained rules from data_dir
+            logging.info(f"Test mode: Loading trained rules from {self.cfg.data_dir}...")
+            data_dir = os.path.join(self.root_dir, self.cfg.data_dir)
+            
+            if not os.path.exists(data_dir):
+                raise RuntimeError(f"Data directory not found: {data_dir}")
+            
+            population = []
+            response_id = 0
+            
+            # Load all .txt files from subdirectories
+            for folder in sorted(os.listdir(data_dir)):
+                folder_path = os.path.join(data_dir, folder)
+                if os.path.isdir(folder_path):
+                    for file in os.listdir(folder_path):
+                        if file.endswith('.txt'):
+                            file_path = os.path.join(folder_path, file)
+                            code = extract_code_from_generator(file_to_string(file_path))
+                            
+                            individual = {
+                                "stdout_filepath": f"problem_iter{self.iteration}_stdout{response_id}.txt",
+                                "code_path": f"problem_iter{self.iteration}_code{response_id}.py",
+                                "code": code,
+                                "response_id": response_id,
+                            }
+                            population.append(individual)
+                            response_id += 1
+            
+            if len(population) == 0:
+                raise RuntimeError(f"No trained rules found in {data_dir}")
+            
+            logging.info(f"Loaded {len(population)} trained rules")
+            
+            # Evaluate loaded population
+            self.population = self.evaluate_population(population, self.case_num)
+            self.update_iter()
+            
+        else:
+            # Train mode: Normal initialization with seed and LLM generation
+            logging.info("Train mode: Evaluating seed function...")
+            code = extract_code_from_generator(self.seed_func).replace("v1", "v2")
+            logging.info("Seed function code: \n" + code)
+            
+            seed_ind = {
+                "stdout_filepath": f"problem_iter{self.iteration}_stdout0.txt",
+                "code_path": f"problem_iter{self.iteration}_code0.py",
+                "code": code,
+                "response_id": 0,
+            }
+            self.seed_ind = seed_ind
+            self.population = self.evaluate_population([self.seed_ind], self.case_num)
 
-        # Validate seed function
-        if not self.seed_ind["exec_success"]:
-            raise RuntimeError(
-                f"Seed function is invalid. Please check the stdout file in {os.getcwd()}."
+            # Validate seed function
+            if not self.seed_ind["exec_success"]:
+                raise RuntimeError(
+                    f"Seed function is invalid. Please check the stdout file in {os.getcwd()}."
+                )
+
+            self.update_iter()
+            
+            # Generate initial population using LLM
+            system = self.system_generator_prompt
+            user = self.user_generator_prompt + "\n" + self.seed_prompt + "\n" + self.long_term_reflection_str
+            messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+            logging.info("Initial Population Prompt: \nSystem Prompt: \n" + system + "\nUser Prompt: \n" + user)
+
+            # Increase temperature for diverse initial population
+            responses = multi_chat_completion(
+                [messages], 
+                self.cfg.init_pop_size, 
+                self.cfg.model, 
+                self.cfg.temperature + 0.3
             )
+            population = [self.response_to_individual(response, response_id) 
+                         for response_id, response in enumerate(responses)]
 
-        self.update_iter()
-        
-        # Generate initial population using LLM
-        system = self.system_generator_prompt
-        user = self.user_generator_prompt + "\n" + self.seed_prompt + "\n" + self.long_term_reflection_str
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-        logging.info("Initial Population Prompt: \nSystem Prompt: \n" + system + "\nUser Prompt: \n" + user)
+            # Evaluate generated population
+            population = self.evaluate_population(population, self.case_num)
 
-        # Increase temperature for diverse initial population
-        responses = multi_chat_completion(
-            [messages], 
-            self.cfg.init_pop_size, 
-            self.cfg.model, 
-            self.cfg.temperature + 0.3
-        )
-        population = [self.response_to_individual(response, response_id) 
-                     for response_id, response in enumerate(responses)]
-
-        # Evaluate generated population
-        population = self.evaluate_population(population, self.case_num)
-
-        # Update iteration and population
-        self.population = population
-        self.update_iter()
+            # Update iteration and population
+            self.population = population
+            self.update_iter()
 
     # def post_thought(self, code, algorithm):
 
@@ -359,9 +402,12 @@ class ReEvo:
         case_num_str = ' '.join(map(str, case_num))
         eval_file_path = f'{self.root_dir}/problems/{self.problem}/eval.py'
         
+        # Pass framework mode to eval.py for dataset selection
+        dataset_mode = "test" if self.mode == "test" else "train"
+        
         with open(individual["stdout_filepath"], 'w') as f:
             process = subprocess.Popen(
-                [sys.executable, '-u', eval_file_path, self.root_dir, "train", case_num_str],
+                [sys.executable, '-u', eval_file_path, self.root_dir, "train", case_num_str, dataset_mode],
                 stdout=f, 
                 stderr=f
             )
@@ -382,22 +428,29 @@ class ReEvo:
         best_obj = min(objs)
         best_sample_idx = np.argmin(np.array(objs))
         
-        # Track improvement
-        previous_best = self.best_obj_overall
-        
-        # Update best overall solution
-        if self.best_obj_overall is None or best_obj < self.best_obj_overall:
-            improvement = 0 if previous_best is None else (previous_best - best_obj)
-            self.improvement_history.append(improvement)
-            self.best_obj_overall = best_obj
-            self.best_code_overall = population[best_sample_idx]["code"]
-            self.best_code_path_overall = population[best_sample_idx]["code_path"]
-            logging.info(f"Iteration {self.iteration}: Improvement = {improvement:.4f}")
+        # Track improvement (train mode only)
+        if self.mode == "train":
+            previous_best = self.best_obj_overall
+            
+            # Update best overall solution
+            if self.best_obj_overall is None or best_obj < self.best_obj_overall:
+                improvement = 0 if previous_best is None else (previous_best - best_obj)
+                self.improvement_history.append(improvement)
+                self.best_obj_overall = best_obj
+                self.best_code_overall = population[best_sample_idx]["code"]
+                self.best_code_path_overall = population[best_sample_idx]["code_path"]
+                logging.info(f"Iteration {self.iteration}: Improvement = {improvement:.4f}")
+            else:
+                self.improvement_history.append(0)
+            
+            # Track best objective history
+            self.best_obj_history.append(best_obj)
         else:
-            self.improvement_history.append(0)
-        
-        # Track best objective history
-        self.best_obj_history.append(best_obj)
+            # Test mode: just update best solution without tracking history
+            if self.best_obj_overall is None or best_obj < self.best_obj_overall:
+                self.best_obj_overall = best_obj
+                self.best_code_overall = population[best_sample_idx]["code"]
+                self.best_code_path_overall = population[best_sample_idx]["code_path"]
         
         # Update elitist individual
         if self.elitist is None or best_obj < self.elitist["obj"]:
@@ -843,62 +896,45 @@ class ReEvo:
         return population
 
 
-    def evolve(self) -> tuple[str, str]:
-        """Main evolutionary loop.
+    def _run_single_iteration(self) -> None:
+        """Execute one iteration of the evolutionary process (ReEvo: no individual self-evolution).
         
-        Performs the following steps in each iteration:
+        Steps:
         1. Selection
         2. Population inter-evolution (crossover with reflection)
-        3. Individual self-evolution
-        4. Long-term reflection
-        5. Mutation
-        
-        Returns:
-            Tuple of (best_code, best_code_path)
+        3. Long-term reflection (train mode only)
+        4. Mutation (train mode only)
         """
-        while self.function_evals < self.cfg.max_fe:
-            # Check if all individuals are invalid
-            if all(not individual["exec_success"] for individual in self.population):
-                raise RuntimeError(
-                    f"All individuals are invalid. Please check the stdout files in {os.getcwd()}."
-                )
-            
-            # Selection: add elitist to population if not already present
-            if self.elitist is None or self.elitist in self.population:
-                population_to_select = self.population
-            else:
-                population_to_select = [self.elitist] + self.population
-            
-            selected_population = self.random_select(population_to_select)
-            if selected_population is None:
-                raise RuntimeError("Selection failed. Please check the population.")
-            
-            # Population inter-evolution: reflection + crossover
-            population_inter_envoltion_reflection_tuple = self.population_inter_envoltion_reflection(
-                selected_population
+        # Check if all individuals are invalid
+        if all(not individual["exec_success"] for individual in self.population):
+            raise RuntimeError(
+                f"All individuals are invalid. Please check the stdout files in {os.getcwd()}."
             )
-            population_inter_envoltion_population = self.population_inter_envoltion(
-                population_inter_envoltion_reflection_tuple
-            )
-            self.population = self.evaluate_population(
-                population_inter_envoltion_population, self.case_num
-            )
-            self.update_iter()
+        
+        # Selection: add elitist to population if not already present
+        if self.elitist is None or self.elitist in self.population:
+            population_to_select = self.population
+        else:
+            population_to_select = [self.elitist] + self.population
+        
+        selected_population = self.random_select(population_to_select)
+        if selected_population is None:
+            raise RuntimeError("Selection failed. Please check the population.")
+        
+        # Population inter-evolution: reflection + crossover
+        population_inter_envoltion_reflection_tuple = self.population_inter_envoltion_reflection(
+            selected_population
+        )
+        population_inter_envoltion_population = self.population_inter_envoltion(
+            population_inter_envoltion_reflection_tuple
+        )
+        self.population = self.evaluate_population(
+            population_inter_envoltion_population, self.case_num
+        )
+        self.update_iter()
 
-            # Individual self-evolution: reflection + improvement
-            individual_self_evolution_reflection_tuple = self.individual_self_evolution_reflection(
-                self.population, 
-                population_inter_envoltion_reflection_tuple[0], 
-                selected_population
-            )
-            individual_self_evolution_population = self.individual_self_evolution(
-                individual_self_evolution_reflection_tuple
-            )
-            self.population = self.evaluate_population(
-                individual_self_evolution_population, self.case_num
-            )
-            self.update_iter()
-            
+        # Long-term reflection and mutation (train mode only)
+        if self.mode == "train":
             # Long-term reflection: aggregate short-term insights
             self.long_term_reflection(population_inter_envoltion_reflection_tuple[0])
             
@@ -909,8 +945,30 @@ class ReEvo:
             )
             self.population.extend(evaluated_mutated_population)
             
-            # Update iteration and increment function evaluations
+            # Update iteration
             self.update_iter()
-            self.function_evals += 1
+        
+        self.function_evals += 1
+
+
+    def evolve(self) -> tuple[str, str]:
+        """Main evolutionary loop.
+        
+        Train mode: Performs multiple iterations until max_fe is reached
+        Test mode: Performs only one iteration on loaded trained rules
+        
+        ReEvo does NOT include individual self-evolution (unlike SeEvo).
+        
+        Returns:
+            Tuple of (best_code, best_code_path)
+        """
+        if self.mode == "test":
+            # Test mode: run single iteration
+            logging.info("Test mode: Running single iteration...")
+            self._run_single_iteration()
+        else:
+            # Train mode: normal multi-iteration loop
+            while self.function_evals < self.cfg.max_fe:
+                self._run_single_iteration()
         
         return self.best_code_overall, self.best_code_path_overall

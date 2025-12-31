@@ -1,0 +1,46 @@
+```python
+import numpy as np
+
+def get_combined_expression_v2(
+    pt: np.ndarray,
+    wkr: np.ndarray,
+    rm: np.ndarray,
+    so: np.ndarray,
+    twk: np.ndarray,
+    ema: np.ndarray,
+) -> np.ndarray:
+    epsilon = 1e-10  # small stability constant to avoid division by zero
+
+    # Normalize variables by total workload plus epsilon
+    norm_pt = pt / (twk + epsilon)
+    norm_wkr = wkr / (twk + epsilon)
+    norm_rm = rm / (twk + epsilon)
+    norm_so = so / (twk + epsilon)
+
+    # Adaptive EMA weight: more weight when deviation is moderate, less at extremes
+    abs_ema = np.abs(ema)
+    ema_weight = np.clip(1 - 0.8 * np.tanh(4 * abs_ema), 0.15, 1.0)
+
+    # Interaction between current processing time and workload difference,
+    # amplified by a nonlinear urgency factor
+    workload_diff = np.maximum(norm_wkr - norm_rm, 0)
+    urgency = np.power(norm_pt + workload_diff + epsilon, 1.4)
+
+    interaction = norm_pt * workload_diff * urgency
+
+    # Look-ahead penalty: succeeding operation scaled by EMA-weight adjusted factor,
+    # with a smooth polynomial weight on ema to penalize large deviations softly
+    look_ahead = norm_so * (1 + 1.8 * ema * ema_weight + 0.5 * ema ** 2)
+
+    # Historical deviation factor introducing nonlinear, smoothed influence of EMA
+    ema_effect = ema_weight * np.tanh(3 * ema)
+
+    # Composite priority combining immediate urgency, look-ahead penalty, EMA effects,
+    # and interaction terms to capture workload relations dynamically
+    combined_raw = interaction + 0.85 * look_ahead + ema_effect
+
+    # Final smooth nonlinear transformation expands differences yet keeps bounded scale
+    combined_expression_data = np.tanh(combined_raw) * (1 + 0.6 * ema_weight)
+
+    return combined_expression_data
+```

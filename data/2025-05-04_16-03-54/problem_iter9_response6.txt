@@ -1,0 +1,73 @@
+```python
+import numpy as np
+
+def get_combined_expression_v2(
+    pt: np.ndarray,
+    wkr: np.ndarray,
+    rm: np.ndarray,
+    so: np.ndarray,
+    twk: np.ndarray,
+    ema: np.ndarray,
+) -> np.ndarray:
+    """
+    Calculate an enhanced priority score for scheduling job shop operations by applying precise normalization,
+    refined nonlinear scaling of workload metrics, stronger asymmetric EMA penalties on processing deviations,
+    and stabilized lookahead bottleneck indicators with smoothing, followed by multiplicative blending and
+    normalization to ensure robust, comparable scheduling scores.
+
+    Parameters:
+        pt (np.ndarray): Processing time of the current operation.
+        wkr (np.ndarray): Remaining processing time for all workpieces.
+        rm (np.ndarray): Remaining processing time excluding the current operation.
+        so (np.ndarray): Processing time of the succeeding operation.
+        twk (np.ndarray): Total processing time for all workpieces.
+        ema (np.ndarray): Exponential Moving Average of relative deviation between realized and nominal processing times.
+
+    Returns:
+        np.ndarray: Combined priority scores guiding scheduling decisions.
+    """
+    eps = 1e-14
+
+    # Refined coefficients balancing contributions with slight adjustment for sensitivity
+    alpha_pt = 0.315
+    alpha_rm = 0.445
+    alpha_wkr = 0.24
+
+    beta_lookahead = 0.64
+    beta_ema = 0.54
+    gamma_asym = 3.0  # stronger asymmetric exponent for positive ema deviations
+
+    # Normalize workloads with stable epsilon to prevent division by zero and maintain smooth gradients
+    base_norm = pt + rm + eps
+    norm_pt = pt / base_norm
+    norm_rm = rm / base_norm
+    norm_wkr = wkr / (twk + eps)
+
+    # Apply smooth nonlinear scaling emphasizing heavier load contributions with fractional power exponents
+    local_load = (
+        alpha_pt * np.power(norm_pt, 1.5)
+        + alpha_rm * np.power(norm_rm, 1.22)
+        + alpha_wkr * np.power(norm_wkr, 1.35)
+    )
+
+    # Stabilized lookahead ratio with slight smoothing constants to avoid extremes and improve bottleneck detection
+    lookahead_ratio = (so + 0.20) / (rm + 0.20)
+    lookahead_exp = np.exp(beta_lookahead * (lookahead_ratio - 1))
+
+    # EMA penalty: sharply penalize overruns (pos ema) with higher power, softly reward underruns (neg ema) quadratically,
+    # with a bit increased weight for penalty impact relative to previous versions
+    ema_penalty = np.ones_like(ema)
+    pos_mask = ema > 0
+    neg_mask = ~pos_mask
+
+    ema_penalty[pos_mask] = 1 + beta_ema * np.power(ema[pos_mask], gamma_asym)
+    ema_penalty[neg_mask] = 1 + beta_ema * 0.35 * (ema[neg_mask] ** 2)
+
+    # Composite score uses multiplicative blending to combine workload, bottleneck and deviation effects smoothly
+    raw_score = local_load * lookahead_exp * ema_penalty
+
+    # Final normalization by sqrt total workload plus epsilon to control scale and enable instance-to-instance comparability
+    combined_expression = raw_score / (np.sqrt(twk + eps) + eps)
+
+    return combined_expression
+```
