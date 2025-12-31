@@ -55,7 +55,7 @@ An LLM-driven evolutionary algorithm framework for automatically discovering eff
 
 1. **Clone the repository**
 ```bash
-git clone <repository-url>
+git clone https://github.com/huangjin-collab/LHH_DFJSP_SeEvo.git
 cd LHH_DFJSP_SeEvo
 ```
 
@@ -78,14 +78,7 @@ pip install dashscope hydra-core numpy pandas
 pip install zhipuai hydra-core numpy pandas
 ```
 
-**For Moonshot AI**:
-```bash
-pip install openai hydra-core numpy pandas  # Uses OpenAI-compatible API
-```
-
 3. **Configure API Key**
-
-Option 1: Environment variable (recommended)
 ```bash
 # For OpenAI
 export OPENAI_API_KEY="your-api-key-here"
@@ -95,14 +88,6 @@ export DASHSCOPE_API_KEY="your-api-key-here"
 
 # For GLM
 export ZHIPUAI_API_KEY="your-api-key-here"
-```
-
-Option 2: Configuration file
-```yaml
-# cfg/config.yaml
-api_key: "your-api-key-here"  # Add this line
-```
-
 ---
 
 ## 📖 Usage
@@ -219,7 +204,7 @@ python main.py
 cat outputs/train/main/2025-12-30_10-30-45/main.log | grep "Best obj"
 
 # Check test results
-cat outputs/test/main/2025-12-30_14-20-30/main.log | grep "Average makespan"
+cat outputs/test/main/2025-12-30_14-20-30/main.log | grep "Best obj"
 ```
 
 ---
@@ -237,7 +222,7 @@ mode: train  # Options: train, test
 data_dir: data  # Directory for trained rules (test mode only)
 
 # LLM parameters
-model: qwen-plus  # Options: gpt-3.5-turbo, gpt-4, GLM-4, qwen-plus, moonshot-v1-8k
+model: qwen-plus  # Options: gpt-3.5-turbo, gpt-4, GLM-4, qwen-plus
 temperature: 1
 
 # GA parameters
@@ -258,7 +243,6 @@ timeout: 100  # Evaluation timeout (seconds)
 | Alibaba | Qwen Turbo | `qwen-turbo` |
 | Zhipu AI | GLM-3 Turbo | `GLM-3-Turbo` |
 | Zhipu AI | GLM-4 | `GLM-4` |
-| Moonshot | Moonshot v1 8K | `moonshot-v1-8k` |
 
 ---
 
@@ -296,17 +280,11 @@ problems/jsp_constructive/test_data/
 ### Performance Considerations
 
 **Training Time**:
-- Single iteration: ~2-5 minutes (depending on LLM response time)
+- Single iteration: ~1-3 minutes (depending on LLM response time)
 - Full training (20 iterations): ~1-2 hours
 - Influenced by: LLM API latency, population size, dataset complexity
 
-**API Costs**:
-- GPT-3.5-turbo: ~$0.50-1.00 per full training run
-- GPT-4: ~$5.00-10.00 per full training run  
-- Qwen/GLM: Varies by provider pricing
-
 **Tips for Efficiency**:
-- Use smaller `pop_size` for initial experiments (e.g., 10 instead of 20)
 - Reduce `max_fe` for quick prototyping
 - Cache successful heuristics to avoid regeneration
 - Use faster models (GPT-3.5, Qwen-turbo) for development
@@ -486,11 +464,6 @@ We are actively working on improving the framework with the following enhancemen
 
 One of the key challenges in LLM-driven heuristic discovery is ensuring that evolved heuristics can generalize well across different problem instances and scales. We are developing several approaches to address this:
 
-#### 🚧 Cross-Scale Generalization
-- Developing techniques to ensure heuristics trained on small-scale problems can effectively handle larger instances
-- Implementing multi-scale training strategies that expose the LLM to diverse problem sizes during evolution
-- Creating evaluation metrics that specifically measure generalization capability
-
 #### 🚧 Domain Adaptation
 - Enabling transfer of learned heuristics from one scheduling domain to related domains
 - Building mechanisms to identify transferable knowledge components in evolved heuristics
@@ -522,7 +495,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/huangjin-collab/LHH_DFJSP_SeEvo.git
 cd LHH_DFJSP_SeEvo
 
 # Install development dependencies
@@ -548,8 +521,25 @@ For questions or support, please open an issue on GitHub or contact the maintain
 
 ## 🙏 Acknowledgments
 
+We stand on the shoulders of giants (and a few large language models). Our work is built upon the following projects:
+
+### 🏛️ Academic Foundations
+
+- **[ReEvo: Large Language Models as Hyper-Heuristics with Reflective Evolution](https://github.com/ai4co/reevo)** (NeurIPS 2024) - The foundational work that inspired our implementation of LLM-driven evolutionary algorithms for optimization problems. Our ReEvo baseline is directly based on this research.
+
+### 🛠️ Technical Infrastructure
+
+- **OpenAI API** - For providing powerful language models (GPT-3.5, GPT-4) that enable sophisticated heuristic generation and reasoning
+- **Alibaba Cloud DashScope** - For Qwen models offering cost-effective multilingual capabilities
+- **Zhipu AI** - For GLM models with strong domain-specific knowledge
+- **Hydra Framework** - For elegant configuration management
+- **NumPy & Pandas** - For efficient data processing and numerical computations
+
+### 🌟 Community
+
 - Thanks to all contributors and researchers in the field of LLM-driven optimization
 - Special thanks to the open-source community for various tools and libraries used in this project
+- Gratitude to the scheduling and operations research community for providing challenging benchmark problems
 
 ---
 
