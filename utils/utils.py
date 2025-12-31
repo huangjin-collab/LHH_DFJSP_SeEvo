@@ -41,7 +41,7 @@ def init_client(cfg):
         assert os.getenv('QWEN_API_KEY') is not None, \
             "Please set the environment variable QWEN_API_KEY"
         client = OpenAI(
-            api_key=os.getenv('MOONSHOT_API_KEY'), 
+            api_key=os.getenv('QWEN_API_KEY'), 
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
         )
 
