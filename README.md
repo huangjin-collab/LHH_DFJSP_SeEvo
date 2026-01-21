@@ -446,11 +446,15 @@ Test results are saved in `outputs/test/main/<timestamp>/`:
 If you use this work in your research, please cite:
 
 ```bibtex
-@article{huang2025seevo,
-  title={Automatic programming via large language models with population self-evolution for dynamic fuzzy job shop scheduling problem},
-  author={Jin Huang, Qihao Liu, Xinyu Li, Liang Gao, Yue Teng},
-  journal={IEEE TRANSACTIONS ON FUZZY SYSTEMS},
-  year={2025}
+@ARTICLE{huang2025automatic,
+  author={Huang, Jin and Liu, Qihao and Li, Xinyu and Gao, Liang and Teng, Yue},
+  journal={IEEE Transactions on Fuzzy Systems}, 
+  title={Automatic programming via large language models with population self-evolution for dynamic fuzzy job shop scheduling problem}, 
+  year={2026},
+  volume={},
+  number={},
+  pages={1-13},
+  doi={10.1109/TFUZZ.2025.3650586}
 }
 ```
 
